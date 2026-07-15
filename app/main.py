@@ -19,29 +19,31 @@ from contextlib import asynccontextmanager
 
 import numpy as np
 import torch
-from fastapi import FastAPI, File, HTTPException, Query, UploadFile
+from fastapi import FastAPI, File, HTTPException, Query, Request, UploadFile
 
 from app import cache, config
 from app.batching.models import QueueItem
 from app.batching.worker import BatchWorker
-from app.inference.base import InferenceBackend
 from app.inference.registry import load_all_backends
 from app.labels import label_for
 from app.preprocessing import preprocess_image_bytes
 
-# Shared state, populated at startup by the lifespan handler below.
-# A plain asyncio.Queue is the hand-off point between request handlers
-# (producers) and the BatchWorker (consumer) - see
-# docs/concepts/02_async_queue_processing.md for why this specific
-# primitive, not a list or a thread-safe queue.Queue.
-request_queue: asyncio.Queue[QueueItem] = asyncio.Queue()
-backends: dict[str, InferenceBackend] = {}
-worker: BatchWorker | None = None
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global backends, worker
+    # request_queue is created HERE, inside lifespan, not as a module-level
+    # global - an asyncio.Queue binds itself to whichever event loop is
+    # currently running at the moment it's constructed. A module-level
+    # `asyncio.Queue()` gets bound to the loop that happened to exist when
+    # the module was first imported; if the app's lifespan ever starts
+    # again under a *different* loop (this bit us running pytest: each
+    # test's TestClient spins up its own event loop), every
+    # `await request_queue.put(...)` call fails with "Queue ... is bound to
+    # a different event loop". Creating it inside lifespan() guarantees
+    # it's always bound to the loop actually running this app instance.
+    # app.state is FastAPI's built-in place for exactly this kind of
+    # request-accessible, lifespan-scoped state.
+    app.state.request_queue = asyncio.Queue()
 
     # Pinning PyTorch's thread count here (once, at process startup) rather
     # than leaving it at the library default keeps CPU usage predictable
@@ -50,27 +52,27 @@ async def lifespan(app: FastAPI):
     torch.set_num_threads(config.TORCH_NUM_THREADS)
 
     print("Loading inference backends (this happens once, not per-request)...")
-    backends = load_all_backends()
+    app.state.backends = load_all_backends()
 
-    worker = BatchWorker(request_queue, backends)
-    worker.start()
+    app.state.worker = BatchWorker(app.state.request_queue, app.state.backends)
+    app.state.worker.start()
     print(f"BatchWorker started - window={config.BATCH_WINDOW_MS}ms, "
           f"max_batch_size={config.MAX_BATCH_SIZE}")
 
     yield
 
     print("Shutting down BatchWorker...")
-    await worker.stop()
+    await app.state.worker.stop()
 
 
 app = FastAPI(title="InferBench", lifespan=lifespan)
 
 
 @app.get("/health")
-async def health():
+async def health(request: Request):
     return {
         "status": "ok",
-        "backends_loaded": list(backends.keys()),
+        "backends_loaded": list(request.app.state.backends.keys()),
         "batch_window_ms": config.BATCH_WINDOW_MS,
         "max_batch_size": config.MAX_BATCH_SIZE,
         "redis_available": cache.is_redis_available(),
@@ -102,12 +104,16 @@ async def cache_stats():
 
 @app.post("/predict")
 async def predict(
+    request: Request,
     file: UploadFile = File(...),
     backend: str = Query(
         default=config.DEFAULT_BACKEND,
         description=f"Which inference backend to use. One of {config.AVAILABLE_BACKENDS}.",
     ),
 ):
+    backends = request.app.state.backends
+    request_queue = request.app.state.request_queue
+
     if backend not in config.AVAILABLE_BACKENDS:
         raise HTTPException(
             status_code=400,
