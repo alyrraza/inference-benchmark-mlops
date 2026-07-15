@@ -163,7 +163,12 @@ def validate_accuracy(pytorch_model, torchscript_model, onnx_session, num_sample
 
             pytorch_logits = pytorch_model(image_torch).logits.numpy()
             torchscript_logits = torchscript_model(image_torch)
-            if hasattr(torchscript_logits, "logits"):
+            # torch.jit.trace flattens HF's ModelOutput into a plain dict,
+            # so attribute access (.logits) no longer works post-tracing -
+            # only the eager PyTorch model still returns the ModelOutput object.
+            if isinstance(torchscript_logits, dict):
+                torchscript_logits = torchscript_logits["logits"]
+            elif hasattr(torchscript_logits, "logits"):
                 torchscript_logits = torchscript_logits.logits
             torchscript_logits = torchscript_logits.numpy()
             onnx_logits = onnx_session.run(None, {"pixel_values": image_np})[0]
