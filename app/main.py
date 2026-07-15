@@ -113,6 +113,15 @@ async def predict(
             status_code=400,
             detail=f"Unknown backend '{backend}'. Choose from {config.AVAILABLE_BACKENDS}.",
         )
+    if backend not in backends:
+        # Recognized backend name, but load_all_backends() couldn't load it
+        # on this particular run (e.g. missing model artifact) - a 503,
+        # not a 400, since the request itself was valid, the server just
+        # can't currently serve it.
+        raise HTTPException(
+            status_code=503,
+            detail=f"Backend '{backend}' is not currently loaded. Available right now: {list(backends.keys())}.",
+        )
 
     image_bytes = await file.read()
     enqueued_at = time.perf_counter()
