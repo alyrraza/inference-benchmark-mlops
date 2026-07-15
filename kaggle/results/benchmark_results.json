@@ -1,0 +1,139 @@
+{
+  "metadata": {
+    "model": "google/vit-base-patch16-224",
+    "total_parameters": 86567656,
+    "gpu": "Tesla T4",
+    "date": "2026-07-15 15:48:24",
+    "notebook": "inferbench-vit-gpu-benchmark"
+  },
+  "pytorch_baseline": [
+    {
+      "batch_size": 1,
+      "mean_ms": 14.878917560008631,
+      "p50_ms": 14.519182499952876,
+      "p95_ms": 18.697912200036605,
+      "p99_ms": 22.048409910157716
+    },
+    {
+      "batch_size": 4,
+      "mean_ms": 47.07080796001719,
+      "p50_ms": 46.90458099980788,
+      "p95_ms": 47.74082655012535,
+      "p99_ms": 52.817821710250406
+    },
+    {
+      "batch_size": 8,
+      "mean_ms": 80.7267314800265,
+      "p50_ms": 80.44939250021343,
+      "p95_ms": 80.80559639986404,
+      "p99_ms": 96.24595861977919
+    },
+    {
+      "batch_size": 16,
+      "mean_ms": 166.85032185995624,
+      "p50_ms": 166.87729199975365,
+      "p95_ms": 169.62998284984678,
+      "p99_ms": 170.04124559013235
+    }
+  ],
+  "onnx_runtime_cuda": [
+    {
+      "batch_size": 1,
+      "mean_ms": 15.431678460045077,
+      "p50_ms": 15.514513500193061,
+      "p95_ms": 15.743741949995638,
+      "p99_ms": 15.926714039997023
+    },
+    {
+      "batch_size": 4,
+      "mean_ms": 46.88647545999629,
+      "p50_ms": 46.9971100001203,
+      "p95_ms": 47.11750254994058,
+      "p99_ms": 47.34718229995906
+    },
+    {
+      "batch_size": 8,
+      "mean_ms": 94.77023001999441,
+      "p50_ms": 94.80728549988271,
+      "p95_ms": 95.96296940005686,
+      "p99_ms": 98.08676024004852
+    },
+    {
+      "batch_size": 16,
+      "mean_ms": 189.68191266002577,
+      "p50_ms": 189.35919500017917,
+      "p95_ms": 191.37166304988114,
+      "p99_ms": 199.72934118007285
+    }
+  ],
+  "tensorrt_fp16": [
+    {
+      "batch_size": 1,
+      "mean_ms": 5.143965300012496,
+      "p50_ms": 5.618572499997754,
+      "p95_ms": 5.671790400037935,
+      "p99_ms": 5.737782760102164
+    },
+    {
+      "batch_size": 4,
+      "mean_ms": 8.464775039983579,
+      "p50_ms": 8.383582000078604,
+      "p95_ms": 8.924190249899766,
+      "p99_ms": 9.149107240059493
+    },
+    {
+      "batch_size": 8,
+      "mean_ms": 15.182202340015465,
+      "p50_ms": 15.302645500014478,
+      "p95_ms": 15.672027200105276,
+      "p99_ms": 15.867781409956478
+    },
+    {
+      "batch_size": 16,
+      "mean_ms": 32.539272260009966,
+      "p50_ms": 32.58808450004835,
+      "p95_ms": 34.061075749832526,
+      "p99_ms": 34.49558538991823
+    }
+  ],
+  "accuracy_validation": {
+    "test_set": "tiny-imagenet validation, 100 samples",
+    "onnx_vs_pytorch_match_pct": 100.0,
+    "tensorrt_vs_pytorch_match_pct": 100.0,
+    "onnx_vs_pytorch_mean_abs_diff": 4.835836762140389e-07,
+    "tensorrt_vs_pytorch_mean_abs_diff": 0.0022142978850752115,
+    "mismatched_samples": []
+  },
+  "speedup_summary": {
+    "batch_1": {
+      "pytorch_ms": 14.878917560008631,
+      "onnx_ms": 15.431678460045077,
+      "tensorrt_ms": 5.143965300012496,
+      "tensorrt_speedup_vs_pytorch": 2.89
+    },
+    "batch_4": {
+      "pytorch_ms": 47.07080796001719,
+      "onnx_ms": 46.88647545999629,
+      "tensorrt_ms": 8.464775039983579,
+      "tensorrt_speedup_vs_pytorch": 5.56
+    },
+    "batch_8": {
+      "pytorch_ms": 80.7267314800265,
+      "onnx_ms": 94.77023001999441,
+      "tensorrt_ms": 15.182202340015465,
+      "tensorrt_speedup_vs_pytorch": 5.32
+    },
+    "batch_16": {
+      "pytorch_ms": 166.85032185995624,
+      "onnx_ms": 189.68191266002577,
+      "tensorrt_ms": 32.539272260009966,
+      "tensorrt_speedup_vs_pytorch": 5.13
+    }
+  },
+  "environment_issues_resolved": [
+    "torchaudio CUDA version mismatch (13.0 vs 12.8) caused transformers import crash - fixed by uninstalling torchaudio",
+    "New PyTorch dynamo-based ONNX exporter required 'onnxscript' package - installed separately",
+    "Generic 'tensorrt' pip package auto-selected CUDA 13 variant incompatible with onnxruntime-gpu (CUDA 12.x) - fixed by explicitly installing tensorrt-cu12",
+    "TensorRT shared libraries (.so files) not in system LD_LIBRARY_PATH - resolved by symlinking all tensorrt_libs/*.so* files into /usr/lib and running ldconfig"
+  ]
+}
