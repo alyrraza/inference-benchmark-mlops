@@ -8,11 +8,9 @@ Endpoints:
     GET  /health   - liveness check, also reports which backends loaded
     POST /predict  - upload an image, get back a predicted class
 
-This is Phase 2 of the build: FastAPI + the custom dynamic batching layer
-only. There is no Redis cache, no PostgreSQL logging, and no Prometheus
-/metrics endpoint yet - those are Phase 3, 4, and 5. Wiring them in later
-means adding calls at the points marked in docs/sequence_diagram.puml,
-not changing this file's structure.
+This is Phase 3 of the build: FastAPI + the custom dynamic batching layer
+(Phase 2) + Redis response caching (Phase 3). There is no PostgreSQL
+logging or Prometheus /metrics endpoint yet - those are Phase 4 and 5.
 """
 
 import asyncio
@@ -23,7 +21,7 @@ import numpy as np
 import torch
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 
-from app import config
+from app import cache, config
 from app.batching.models import QueueItem
 from app.batching.worker import BatchWorker
 from app.inference.base import InferenceBackend
@@ -75,6 +73,7 @@ async def health():
         "backends_loaded": list(backends.keys()),
         "batch_window_ms": config.BATCH_WINDOW_MS,
         "max_batch_size": config.MAX_BATCH_SIZE,
+        "redis_available": cache.is_redis_available(),
     }
 
 
@@ -93,12 +92,32 @@ async def predict(
         )
 
     image_bytes = await file.read()
+    enqueued_at = time.perf_counter()
+
+    # This is docs/sequence_diagram.puml's "API -> Redis : check cache for
+    # identical request" step. It happens before preprocessing on purpose -
+    # a cache hit skips the resize/normalize work too, not just the model
+    # call, since neither is needed to answer a request we've already
+    # answered before.
+    cached = cache.get_cached_prediction(image_bytes, backend)
+    if cached is not None:
+        total_latency_ms = (time.perf_counter() - enqueued_at) * 1000
+        return {
+            **cached,
+            "backend": backend,
+            "cache_hit": True,
+            "batch_size": None,
+            "total_latency_ms": round(total_latency_ms, 2),
+        }
+
+    # Cache miss from here on - this is the "else Cache Miss" branch of the
+    # sequence diagram: preprocess, enqueue, await the batch worker's
+    # result, then store it in Redis before returning.
     try:
         image_tensor = preprocess_image_bytes(image_bytes)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Could not read image: {exc}")
 
-    enqueued_at = time.perf_counter()
     future: asyncio.Future = asyncio.get_event_loop().create_future()
     item = QueueItem(image=image_tensor, backend=backend, future=future, enqueued_at=enqueued_at)
 
@@ -114,13 +133,21 @@ async def predict(
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Inference failed: {exc}")
 
-    total_latency_ms = (time.perf_counter() - enqueued_at) * 1000
     predicted_class_id = int(np.argmax(logits))
-
-    return {
+    result = {
         "predicted_class_id": predicted_class_id,
         "predicted_label": label_for(predicted_class_id),
+    }
+
+    # "API -> Redis : store result in cache" - only real inference results
+    # get cached, never a cache hit re-caching itself.
+    cache.store_prediction(image_bytes, backend, result)
+
+    total_latency_ms = (time.perf_counter() - enqueued_at) * 1000
+    return {
+        **result,
         "backend": backend,
+        "cache_hit": False,
         "batch_size": item.batch_size,
         "total_latency_ms": round(total_latency_ms, 2),
     }
