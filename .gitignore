@@ -1,0 +1,15 @@
+.venv/
+.pip-cache/
+.hf-cache/
+.claude/
+__pycache__/
+*.pyc
+*.onnx
+*.onnx.data
+*.pt
+*.pth
+kaggle/vit_base.onnx
+
+# Personal planning notes and internal teaching docs - kept locally,
+# not pushed to the public repo. README.md is the public-facing doc.
+docs/
