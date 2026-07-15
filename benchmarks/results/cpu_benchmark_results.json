@@ -1,0 +1,144 @@
+{
+  "metadata": {
+    "model": "google/vit-base-patch16-224",
+    "total_parameters": 86567656,
+    "device": "CPU",
+    "cpu": "Intel64 Family 6 Model 142 Stepping 10, GenuineIntel",
+    "os": "Windows-10-10.0.19045-SP0",
+    "torch_num_threads": 4,
+    "date": "2026-07-15 19:50:45",
+    "script": "benchmarks/run_cpu_benchmark.py"
+  },
+  "pytorch_baseline": [
+    {
+      "batch_size": 1,
+      "mean_ms": 263.23629599988635,
+      "p50_ms": 256.2173000005714,
+      "p95_ms": 340.99957499965967,
+      "p99_ms": 361.2279269995269
+    },
+    {
+      "batch_size": 4,
+      "mean_ms": 945.1577500003623,
+      "p50_ms": 933.6759999987407,
+      "p95_ms": 1162.8233300003558,
+      "p99_ms": 1239.2112350004027
+    },
+    {
+      "batch_size": 8,
+      "mean_ms": 1830.8759379997355,
+      "p50_ms": 1787.4961999987136,
+      "p95_ms": 2153.7071299999297,
+      "p99_ms": 2202.001457998922
+    },
+    {
+      "batch_size": 16,
+      "mean_ms": 3782.9875000002357,
+      "p50_ms": 3760.045650000393,
+      "p95_ms": 4239.197750000312,
+      "p99_ms": 4393.279879999536
+    }
+  ],
+  "onnx_runtime_cpu": [
+    {
+      "batch_size": 1,
+      "mean_ms": 280.3409760001523,
+      "p50_ms": 268.2448999985354,
+      "p95_ms": 347.92080000097485,
+      "p99_ms": 436.62397099797084
+    },
+    {
+      "batch_size": 4,
+      "mean_ms": 1146.0281460000988,
+      "p50_ms": 1125.2868999999919,
+      "p95_ms": 1473.6562699989006,
+      "p99_ms": 1548.7184939997678
+    },
+    {
+      "batch_size": 8,
+      "mean_ms": 2158.9811760004523,
+      "p50_ms": 2182.7963499999896,
+      "p95_ms": 2460.5664100019567,
+      "p99_ms": 2554.995706999507
+    },
+    {
+      "batch_size": 16,
+      "mean_ms": 4406.938131999777,
+      "p50_ms": 4441.793349998989,
+      "p95_ms": 4842.0204199966975,
+      "p99_ms": 4921.4025350012525
+    }
+  ],
+  "torchscript": [
+    {
+      "batch_size": 1,
+      "mean_ms": 306.6506279997702,
+      "p50_ms": 291.22080000161077,
+      "p95_ms": 446.40011500341586,
+      "p99_ms": 563.7551489994075
+    },
+    {
+      "batch_size": 4,
+      "mean_ms": 1055.0668079995376,
+      "p50_ms": 1060.0233999975899,
+      "p95_ms": 1156.8475449988907,
+      "p99_ms": 1310.9123780015216
+    },
+    {
+      "batch_size": 8,
+      "mean_ms": 2082.8724540000258,
+      "p50_ms": 2090.161749994877,
+      "p95_ms": 2346.0761400045158,
+      "p99_ms": 2416.652241996562
+    },
+    {
+      "batch_size": 16,
+      "mean_ms": 4148.948691999831,
+      "p50_ms": 4232.105699997192,
+      "p95_ms": 4423.649805000605,
+      "p99_ms": 4479.452698997557
+    }
+  ],
+  "accuracy_validation": {
+    "test_set": "synthetic fixed-seed random tensors, 20 samples (seed=42)",
+    "onnx_vs_pytorch_match_pct": 100.0,
+    "torchscript_vs_pytorch_match_pct": 100.0,
+    "onnx_vs_pytorch_mean_abs_diff": 1.3403664524958003e-06,
+    "torchscript_vs_pytorch_mean_abs_diff": 0.0
+  },
+  "speedup_summary": {
+    "batch_1": {
+      "pytorch_ms": 263.23629599988635,
+      "onnx_ms": 280.3409760001523,
+      "torchscript_ms": 306.6506279997702,
+      "onnx_speedup_vs_pytorch": 0.94,
+      "torchscript_speedup_vs_pytorch": 0.86
+    },
+    "batch_4": {
+      "pytorch_ms": 945.1577500003623,
+      "onnx_ms": 1146.0281460000988,
+      "torchscript_ms": 1055.0668079995376,
+      "onnx_speedup_vs_pytorch": 0.82,
+      "torchscript_speedup_vs_pytorch": 0.9
+    },
+    "batch_8": {
+      "pytorch_ms": 1830.8759379997355,
+      "onnx_ms": 2158.9811760004523,
+      "torchscript_ms": 2082.8724540000258,
+      "onnx_speedup_vs_pytorch": 0.85,
+      "torchscript_speedup_vs_pytorch": 0.88
+    },
+    "batch_16": {
+      "pytorch_ms": 3782.9875000002357,
+      "onnx_ms": 4406.938131999777,
+      "torchscript_ms": 4148.948691999831,
+      "onnx_speedup_vs_pytorch": 0.86,
+      "torchscript_speedup_vs_pytorch": 0.91
+    }
+  },
+  "environment_issues_resolved": [
+    "kaggle/vit_base.onnx could not be reused for CPU benchmarking - it is only the ONNX graph shell (~100KB), its external weight-data file (vit_base.onnx.data) never left the Kaggle environment. Resolved by re-exporting ONNX locally with benchmarks/export_onnx.py using the same settings (opset 17, dynamic batch axis).",
+    "New PyTorch dynamo-based ONNX exporter required the 'onnxscript' package - installed separately (same issue the Kaggle GPU notebook hit).",
+    "PyTorch's dynamo ONNX exporter prints a unicode checkmark character during export, which crashed on Windows' default cp1252 console encoding (UnicodeEncodeError). Resolved by setting PYTHONIOENCODING=utf-8 and PYTHONUTF8=1 before running the export script."
+  ]
+}
