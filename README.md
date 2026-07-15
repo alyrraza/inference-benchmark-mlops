@@ -13,7 +13,9 @@ with a dynamic batching layer built from scratch.
 ![FastAPI](https://img.shields.io/badge/FastAPI-service-009688)
 ![PyTorch](https://img.shields.io/badge/PyTorch-CPU-ee4c2c)
 ![ONNX Runtime](https://img.shields.io/badge/ONNX%20Runtime-CPU-black)
+![Redis](https://img.shields.io/badge/Redis-caching-DC382D)
 ![Status](https://img.shields.io/badge/status-in%20progress-yellow)
+[![CI](https://github.com/alyrraza/inference-benchmark-mlops/actions/workflows/ci.yml/badge.svg)](https://github.com/alyrraza/inference-benchmark-mlops/actions/workflows/ci.yml)
 
 ## Architecture
 
@@ -62,7 +64,7 @@ reproduced.
 |---|---|---|
 | 1 | CPU benchmarking (PyTorch / ONNX Runtime / TorchScript, batch 1-16) | Done |
 | 2 | FastAPI service + dynamic batching layer built from scratch | Done |
-| 3 | Redis response caching | In progress |
+| 3 | Redis response caching + GitHub Actions CI | Done |
 | 4 | PostgreSQL benchmark/metadata store | Not started |
 | 5 | Prometheus + Grafana observability | Not started |
 | 6 | Docker Compose orchestration | Not started |
@@ -103,10 +105,12 @@ CPU equivalent in this comparison.
   inference backends behind one common interface
 - **A hand-built dynamic batching layer** - `asyncio.Queue` +
   `asyncio.Future`, no batching library
-- **Redis** - response cache (Phase 3, in progress)
+- **Redis** - response cache, keyed on a hash of the image bytes + backend
 - **PostgreSQL** - benchmark/metadata store (Phase 4)
 - **Prometheus + Grafana** - observability (Phase 5)
 - **Docker Compose** - multi-service orchestration (Phase 6)
+- **GitHub Actions** - CI on every push/PR: installs dependencies, runs
+  the pytest smoke suite against a real Redis service container
 
 ## Running locally
 
@@ -116,7 +120,15 @@ environment inside the project folder.
 ```powershell
 cd "D:\MLOps\Infer Bench"
 python -m venv .venv
-.venv\Scripts\python.exe -m pip install fastapi "uvicorn[standard]" python-multipart torch torchvision onnxruntime transformers pillow httpx
+.venv\Scripts\python.exe -m pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
+.venv\Scripts\python.exe -m pip install -r requirements.txt
+```
+
+A local Redis instance is needed for caching (optional - the service
+runs fine without one, every request just becomes a cache miss):
+
+```powershell
+winget install Redis.Redis --accept-package-agreements --accept-source-agreements --silent
 ```
 
 Export the model artifacts once (only needed the first time):
@@ -124,6 +136,13 @@ Export the model artifacts once (only needed the first time):
 ```powershell
 .venv\Scripts\python.exe benchmarks\export_torchscript.py
 .venv\Scripts\python.exe benchmarks\export_onnx.py
+```
+
+Run the tests:
+
+```powershell
+$env:HF_HOME = "D:\MLOps\Infer Bench\.hf-cache"
+.venv\Scripts\python.exe -m pytest tests\ -v
 ```
 
 Start the service:
@@ -137,12 +156,19 @@ Test it (in a second terminal):
 ```powershell
 curl.exe -s http://127.0.0.1:8000/health
 curl.exe -s -X POST "http://127.0.0.1:8000/predict?backend=pytorch" -F "file=@your_image.jpg;type=image/jpeg"
+curl.exe -s http://127.0.0.1:8000/cache/stats
 ```
 
 Run the concurrent load test to see the batching layer group requests:
 
 ```powershell
 .venv\Scripts\python.exe scripts\load_test.py
+```
+
+Run the cache miss/hit demonstration:
+
+```powershell
+.venv\Scripts\python.exe scripts\verify_cache.py
 ```
 
 ## Docker
