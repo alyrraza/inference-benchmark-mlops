@@ -1,0 +1,57 @@
+name: CI
+
+# Runs on every push and every pull request against main - installs
+# dependencies fresh (like a new contributor cloning this repo would have
+# to) and runs the smoke test suite against a real Redis instance, to
+# catch "works on my machine" problems before they reach main.
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    # A real Redis server, provided by GitHub Actions itself as a sibling
+    # container to this job - not mocked, not skipped. This is what makes
+    # test_predict_caches_identical_requests actually exercise the
+    # cache-hit code path in CI instead of silently skipping it.
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      # torch/torchvision need the CPU-only wheel index, not regular PyPI -
+      # same reasoning as requirements.txt's opening comment.
+      - name: Install CPU-only PyTorch
+        run: pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
+
+      - name: Install remaining dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run smoke tests
+        env:
+          # The redis service container above is reachable on localhost
+          # from every step in this job - GitHub Actions maps the
+          # container's port directly onto the runner's network namespace.
+          REDIS_HOST: 127.0.0.1
+          REDIS_PORT: 6379
+        run: pytest tests/ -v
