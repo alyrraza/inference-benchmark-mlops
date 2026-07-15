@@ -77,6 +77,29 @@ async def health():
     }
 
 
+@app.get("/cache/stats")
+async def cache_stats():
+    """
+    Reports cache health and Redis's own built-in hit/miss counters.
+
+    Deliberately uses Redis's INFO command instead of a KEYS
+    inferbench:predict:* scan to count entries - KEYS walks the entire
+    keyspace and blocks Redis while it does, which is a real production
+    footgun on a busy instance. INFO's keyspace_hits/keyspace_misses
+    counters are O(1) to read and don't touch the keyspace at all.
+    """
+    if not cache.is_redis_available():
+        return {"redis_available": False}
+
+    stats = cache.get_client().info("stats")
+    return {
+        "redis_available": True,
+        "keyspace_hits": stats.get("keyspace_hits"),
+        "keyspace_misses": stats.get("keyspace_misses"),
+        "cache_ttl_seconds": config.CACHE_TTL_SECONDS,
+    }
+
+
 @app.post("/predict")
 async def predict(
     file: UploadFile = File(...),
