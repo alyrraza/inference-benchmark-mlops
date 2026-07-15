@@ -18,6 +18,7 @@ Redis instance happens to be running wherever this test executes.
 import io
 
 import numpy as np
+import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
 
@@ -31,33 +32,44 @@ def _fake_image_bytes() -> bytes:
     return buffer.getvalue()
 
 
-def test_health_reports_pytorch_backend_loaded():
-    # `with TestClient(app)` triggers FastAPI's lifespan handler - startup
-    # code (loading backends, starting the BatchWorker) actually runs here,
-    # the same as a real `uvicorn app.main:app` launch would.
-    with TestClient(app) as client:
-        response = client.get("/health")
-        assert response.status_code == 200
-        body = response.json()
-        assert body["status"] == "ok"
-        assert "pytorch" in body["backends_loaded"]
+@pytest.fixture(scope="module")
+def client():
+    # scope="module" means this fixture (and the `with` block's startup/
+    # shutdown) runs ONCE for every test in this file, not once per test.
+    # `with TestClient(app)` triggers FastAPI's lifespan handler, which
+    # loads every model backend from disk/Hugging Face - real, non-mocked
+    # work that takes real time. A plain function-scoped fixture (the
+    # pytest default) would re-run that full startup for every single test
+    # function, loading the same models repeatedly for no benefit - this
+    # is exactly what the first version of this file did, and it made a
+    # 3-test file take nearly 10 minutes and exhaust available disk space
+    # from the repeated model loads. See docs/concepts/03b_phase3_walkthrough.md
+    # for the full story of hitting that.
+    with TestClient(app) as test_client:
+        yield test_client
 
 
-def test_predict_returns_a_prediction():
-    with TestClient(app) as client:
-        files = {"file": ("test.jpg", _fake_image_bytes(), "image/jpeg")}
-        response = client.post("/predict", files=files, params={"backend": "pytorch"})
-
-        assert response.status_code == 200
-        data = response.json()
-        assert "predicted_class_id" in data
-        assert "predicted_label" in data
-        assert data["backend"] == "pytorch"
-        assert isinstance(data["cache_hit"], bool)
+def test_health_reports_pytorch_backend_loaded(client):
+    response = client.get("/health")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "ok"
+    assert "pytorch" in body["backends_loaded"]
 
 
-def test_predict_rejects_unknown_backend():
-    with TestClient(app) as client:
-        files = {"file": ("test.jpg", _fake_image_bytes(), "image/jpeg")}
-        response = client.post("/predict", files=files, params={"backend": "not_a_real_backend"})
-        assert response.status_code == 400
+def test_predict_returns_a_prediction(client):
+    files = {"file": ("test.jpg", _fake_image_bytes(), "image/jpeg")}
+    response = client.post("/predict", files=files, params={"backend": "pytorch"})
+
+    assert response.status_code == 200
+    data = response.json()
+    assert "predicted_class_id" in data
+    assert "predicted_label" in data
+    assert data["backend"] == "pytorch"
+    assert isinstance(data["cache_hit"], bool)
+
+
+def test_predict_rejects_unknown_backend(client):
+    files = {"file": ("test.jpg", _fake_image_bytes(), "image/jpeg")}
+    response = client.post("/predict", files=files, params={"backend": "not_a_real_backend"})
+    assert response.status_code == 400
