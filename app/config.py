@@ -49,3 +49,20 @@ DEFAULT_BACKEND = os.environ.get("DEFAULT_BACKEND", "pytorch")
 # benchmark flagged unpinned thread counts as a fairness gap between
 # backends - see docs/concepts/00_cpu_vs_gpu_inference.md, "common mistakes".
 TORCH_NUM_THREADS = int(os.environ.get("TORCH_NUM_THREADS", "4"))
+
+# --- Redis cache settings ---
+# Port 6380, not Redis's default 6379: this dev machine has a pre-existing
+# Windows service already bound to 6379 that couldn't be removed (needed
+# admin rights this environment doesn't have), so the project's own Redis
+# instance runs on 6380 instead, with its own data directory, to stay
+# completely separate from that leftover service.
+REDIS_HOST = os.environ.get("REDIS_HOST", "127.0.0.1")
+REDIS_PORT = int(os.environ.get("REDIS_PORT", "6380"))
+REDIS_CONNECT_TIMEOUT_SECONDS = float(os.environ.get("REDIS_CONNECT_TIMEOUT_SECONDS", "1.0"))
+
+# How long a cached prediction stays valid. Predictions are deterministic
+# (same image + same backend always produces the same result), so nothing
+# ever goes "stale" in the usual web-cache sense - this TTL exists to
+# bound memory growth and to self-heal within an hour if a bad entry were
+# ever cached, not because the data expires in any meaningful way.
+CACHE_TTL_SECONDS = int(os.environ.get("CACHE_TTL_SECONDS", "3600"))

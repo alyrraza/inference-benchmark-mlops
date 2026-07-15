@@ -2,6 +2,7 @@
 .pip-cache/
 .hf-cache/
 .claude/
+.redis-data/
 __pycache__/
 *.pyc
 *.onnx
