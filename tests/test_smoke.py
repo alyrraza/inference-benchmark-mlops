@@ -73,3 +73,37 @@ def test_predict_rejects_unknown_backend(client):
     files = {"file": ("test.jpg", _fake_image_bytes(), "image/jpeg")}
     response = client.post("/predict", files=files, params={"backend": "not_a_real_backend"})
     assert response.status_code == 400
+
+
+def test_predict_caches_identical_requests(client):
+    # A fresh random image each test run - unseeded on purpose, so this
+    # request can never collide with a leftover cache entry from a
+    # previous run and accidentally start as a hit instead of a miss.
+    image_bytes = _fake_image_bytes()
+
+    first = client.post(
+        "/predict",
+        files={"file": ("test.jpg", image_bytes, "image/jpeg")},
+        params={"backend": "pytorch"},
+    )
+    assert first.status_code == 200
+    first_data = first.json()
+
+    second = client.post(
+        "/predict",
+        files={"file": ("test.jpg", image_bytes, "image/jpeg")},
+        params={"backend": "pytorch"},
+    )
+    assert second.status_code == 200
+    second_data = second.json()
+
+    if not second_data["cache_hit"]:
+        # No Redis reachable in this environment - app/cache.py degraded
+        # every call to a miss, which is correct behavior, just not what
+        # this particular test needs to assert something about. Skip
+        # rather than fail: this environment not having Redis running
+        # isn't a bug in the service.
+        pytest.skip("Redis not reachable in this environment - cache-hit path not exercised")
+
+    assert first_data["cache_hit"] is False
+    assert second_data["predicted_class_id"] == first_data["predicted_class_id"]

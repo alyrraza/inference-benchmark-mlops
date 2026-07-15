@@ -41,6 +41,17 @@ def get_client() -> redis.Redis:
             decode_responses=True,  # get back str instead of bytes - one less .decode() everywhere
             socket_connect_timeout=config.REDIS_CONNECT_TIMEOUT_SECONDS,
             socket_timeout=config.REDIS_CONNECT_TIMEOUT_SECONDS,
+            # Recent redis-py versions default to negotiating RESP3 with a
+            # HELLO command on connect. This dev machine's local Redis
+            # instance is a very old build (3.0.504, from 2016, the only
+            # one readily available for Windows without admin rights - see
+            # config.py's REDIS_PORT comment) that predates RESP3 entirely
+            # and errors with "unknown command 'HELLO'" on every connection
+            # attempt. Forcing protocol=2 (RESP2) skips that handshake and
+            # works against both old and modern Redis servers - CI's
+            # redis:7-alpine service container doesn't need this, but it's
+            # harmless there too.
+            protocol=2,
         )
     return _client
 
