@@ -1,0 +1,31 @@
+# torch and torchvision are NOT listed here - they need the CPU-only wheel
+# index, not regular PyPI. Install them separately:
+#   pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
+
+# Web service
+fastapi==0.139.0
+uvicorn[standard]==0.51.0
+python-multipart==0.0.32
+
+# Inference backends
+onnxruntime==1.27.0
+transformers==5.13.1
+
+# Image handling
+pillow==12.2.0
+
+# Response caching
+redis==8.0.1
+
+# HTTP client - used by scripts/load_test.py and scripts/verify_cache.py
+httpx==0.28.1
+
+# Numerics
+numpy==2.4.4
+
+# ONNX export (benchmarks/export_onnx.py)
+onnx==1.22.0
+onnxscript==0.7.1
+
+# Testing
+pytest==9.1.1
