@@ -20,7 +20,7 @@ from collections import defaultdict
 
 import torch
 
-from app import config
+from app import config, metrics
 from app.batching.models import QueueItem
 from app.inference.base import InferenceBackend
 
@@ -104,6 +104,12 @@ class BatchWorker:
         batch_size = len(items)
         for item in items:
             item.batch_size = batch_size
+
+        # Recorded once per batch, not once per request in it - this is
+        # what makes inferbench_batch_size a real "how many batches were
+        # size N" distribution instead of overweighting large batches by
+        # counting each of their members separately.
+        metrics.record_batch(backend_name, batch_size)
 
         backend = self.backends[backend_name]
         input_tensor = torch.stack([item.image for item in items])

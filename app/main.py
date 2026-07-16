@@ -8,9 +8,9 @@ Endpoints:
     GET  /health   - liveness check, also reports which backends loaded
     POST /predict  - upload an image, get back a predicted class
 
-This is Phase 4 of the build: FastAPI + the custom dynamic batching layer
+This is Phase 5 of the build: FastAPI + the custom dynamic batching layer
 (Phase 2) + Redis response caching (Phase 3) + PostgreSQL request logging
-(Phase 4). There is no Prometheus /metrics endpoint yet - that's Phase 5.
+(Phase 4) + Prometheus /metrics (Phase 5).
 """
 
 import asyncio
@@ -19,9 +19,9 @@ from contextlib import asynccontextmanager
 
 import numpy as np
 import torch
-from fastapi import FastAPI, File, HTTPException, Query, Request, UploadFile
+from fastapi import FastAPI, File, HTTPException, Query, Request, Response, UploadFile
 
-from app import cache, config, db
+from app import cache, config, db, metrics
 from app.batching.models import QueueItem
 from app.batching.worker import BatchWorker
 from app.inference.registry import load_all_backends
@@ -91,6 +91,19 @@ async def health(request: Request):
         "redis_available": cache.is_redis_available(),
         "db_available": request.app.state.db_pool is not None,
     }
+
+
+@app.get("/metrics")
+async def metrics_endpoint():
+    # Prometheus scrapes this endpoint on its own schedule (see
+    # prometheus/prometheus.yml's scrape_interval) - this service never
+    # pushes anything to Prometheus, it only exposes the current state of
+    # its in-process counters/histograms whenever asked. Content-Type
+    # matters here: Prometheus's scraper expects this exact format.
+    return Response(
+        content=metrics.latest_metrics_text(),
+        media_type="text/plain; version=0.0.4; charset=utf-8",
+    )
 
 
 @app.get("/cache/stats")
@@ -166,6 +179,7 @@ async def predict(
                 request.app.state.db_pool, backend, True, None,
                 cached["predicted_class_id"], total_latency_ms,
             )
+        metrics.record_request(backend, True, total_latency_ms)
 
         return {
             **cached,
@@ -215,6 +229,7 @@ async def predict(
             request.app.state.db_pool, backend, False, item.batch_size,
             predicted_class_id, total_latency_ms,
         )
+    metrics.record_request(backend, False, total_latency_ms)
 
     return {
         **result,
