@@ -14,10 +14,12 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
-    # A real Redis server, provided by GitHub Actions itself as a sibling
-    # container to this job - not mocked, not skipped. This is what makes
-    # test_predict_caches_identical_requests actually exercise the
-    # cache-hit code path in CI instead of silently skipping it.
+    # Real Redis and PostgreSQL servers, provided by GitHub Actions itself
+    # as sibling containers to this job - not mocked, not skipped. This is
+    # what makes test_predict_caches_identical_requests and
+    # test_predict_logs_to_database actually exercise the real cache-hit
+    # and database-logging code paths in CI, not just the happy-path code
+    # that never touches either dependency.
     services:
       redis:
         image: redis:7-alpine
@@ -25,6 +27,19 @@ jobs:
           - 6379:6379
         options: >-
           --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: inferbench
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -49,9 +64,18 @@ jobs:
 
       - name: Run smoke tests
         env:
-          # The redis service container above is reachable on localhost
-          # from every step in this job - GitHub Actions maps the
-          # container's port directly onto the runner's network namespace.
+          # Both service containers above are reachable on localhost from
+          # every step in this job - GitHub Actions maps each container's
+          # port directly onto the runner's network namespace. Postgres
+          # here uses real password auth (unlike this project's local dev
+          # cluster, which uses trust auth for zero-friction local setup -
+          # see docs/concepts/04_postgres_metadata_store.md for why that
+          # distinction matters).
           REDIS_HOST: 127.0.0.1
           REDIS_PORT: 6379
+          DB_HOST: 127.0.0.1
+          DB_PORT: 5432
+          DB_NAME: inferbench
+          DB_USER: postgres
+          DB_PASSWORD: postgres
         run: pytest tests/ -v

@@ -15,6 +15,7 @@ exercising the real, non-mocked cache-miss code path whether or not a
 Redis instance happens to be running wherever this test executes.
 """
 
+import asyncio
 import io
 
 import numpy as np
@@ -22,6 +23,7 @@ import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
 
+from app import db
 from app.main import app
 
 
@@ -107,3 +109,39 @@ def test_predict_caches_identical_requests(client):
 
     assert first_data["cache_hit"] is False
     assert second_data["predicted_class_id"] == first_data["predicted_class_id"]
+
+
+def test_predict_logs_to_database(client):
+    health = client.get("/health").json()
+    if not health["db_available"]:
+        # Same reasoning as the cache-hit test's skip above - no Postgres
+        # reachable in this environment isn't a bug in the service (see
+        # app/main.py's lifespan: a database down at startup degrades to
+        # "logging disabled", it doesn't stop the app from serving
+        # predictions), just not something this specific test can check.
+        pytest.skip("PostgreSQL not reachable in this environment - DB logging path not exercised")
+
+    files = {"file": ("test.jpg", _fake_image_bytes(), "image/jpeg")}
+    response = client.post("/predict", files=files, params={"backend": "pytorch"})
+    assert response.status_code == 200
+    data = response.json()
+
+    # Query the request_log table directly - a separate, short-lived
+    # connection pool, not the app's own one, to prove the row is really
+    # sitting in Postgres and readable by anyone, not just recoverable
+    # from the app's in-memory state.
+    async def _fetch_latest_row():
+        pool = await db.create_pool()
+        try:
+            async with pool.acquire() as conn:
+                return await conn.fetchrow(
+                    "SELECT backend, cache_hit, batch_size, predicted_class_id, total_latency_ms "
+                    "FROM request_log ORDER BY id DESC LIMIT 1"
+                )
+        finally:
+            await pool.close()
+
+    row = asyncio.run(_fetch_latest_row())
+    assert row is not None
+    assert row["backend"] == "pytorch"
+    assert row["predicted_class_id"] == data["predicted_class_id"]
