@@ -65,7 +65,7 @@ reproduced.
 | 1 | CPU benchmarking (PyTorch / ONNX Runtime / TorchScript, batch 1-16) | Done |
 | 2 | FastAPI service + dynamic batching layer built from scratch | Done |
 | 3 | Redis response caching + GitHub Actions CI | Done |
-| 4 | PostgreSQL benchmark/metadata store | Not started |
+| 4 | PostgreSQL benchmark/metadata store | Done |
 | 5 | Prometheus + Grafana observability | Not started |
 | 6 | Docker Compose orchestration | Not started |
 | 7 | Gradio demo (Hugging Face Spaces) | Not started |
@@ -106,11 +106,13 @@ CPU equivalent in this comparison.
 - **A hand-built dynamic batching layer** - `asyncio.Queue` +
   `asyncio.Future`, no batching library
 - **Redis** - response cache, keyed on a hash of the image bytes + backend
-- **PostgreSQL** - benchmark/metadata store (Phase 4)
+- **PostgreSQL** - `request_log` table storing backend, cache hit/miss,
+  batch size, predicted class, latency, and timestamp for every request
 - **Prometheus + Grafana** - observability (Phase 5)
 - **Docker Compose** - multi-service orchestration (Phase 6)
 - **GitHub Actions** - CI on every push/PR: installs dependencies, runs
-  the pytest smoke suite against a real Redis service container
+  the pytest smoke suite against real Redis and PostgreSQL service
+  containers
 
 ## Running locally
 
@@ -129,6 +131,21 @@ runs fine without one, every request just becomes a cache miss):
 
 ```powershell
 winget install Redis.Redis --accept-package-agreements --accept-source-agreements --silent
+```
+
+A local PostgreSQL instance is needed for request logging (also optional -
+the service runs fine without one, it just stops recording history).
+This project uses EDB's portable binaries zip instead of the installer,
+so nothing gets registered as a Windows service and no admin rights are
+needed:
+
+```powershell
+Invoke-WebRequest -Uri "https://get.enterprisedb.com/postgresql/postgresql-16.4-1-windows-x64-binaries.zip" -OutFile "postgresql-binaries.zip"
+Expand-Archive -Path "postgresql-binaries.zip" -DestinationPath ".postgres\" -Force
+Remove-Item "postgresql-binaries.zip"
+.\.postgres\pgsql\bin\initdb.exe -D ".\.postgres-data" -U postgres -A trust --encoding=UTF8
+.\.postgres\pgsql\bin\pg_ctl.exe -D ".\.postgres-data" -o "-p 5433" -l ".\.postgres-data\logfile.log" start
+.\.postgres\pgsql\bin\createdb.exe -U postgres -p 5433 inferbench
 ```
 
 Export the model artifacts once (only needed the first time):
@@ -169,6 +186,12 @@ Run the cache miss/hit demonstration:
 
 ```powershell
 .venv\Scripts\python.exe scripts\verify_cache.py
+```
+
+Run the database logging demonstration:
+
+```powershell
+.venv\Scripts\python.exe scripts\verify_db_logging.py
 ```
 
 ## Docker
