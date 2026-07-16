@@ -8,9 +8,9 @@ Endpoints:
     GET  /health   - liveness check, also reports which backends loaded
     POST /predict  - upload an image, get back a predicted class
 
-This is Phase 3 of the build: FastAPI + the custom dynamic batching layer
-(Phase 2) + Redis response caching (Phase 3). There is no PostgreSQL
-logging or Prometheus /metrics endpoint yet - those are Phase 4 and 5.
+This is Phase 4 of the build: FastAPI + the custom dynamic batching layer
+(Phase 2) + Redis response caching (Phase 3) + PostgreSQL request logging
+(Phase 4). There is no Prometheus /metrics endpoint yet - that's Phase 5.
 """
 
 import asyncio
@@ -21,7 +21,7 @@ import numpy as np
 import torch
 from fastapi import FastAPI, File, HTTPException, Query, Request, UploadFile
 
-from app import cache, config
+from app import cache, config, db
 from app.batching.models import QueueItem
 from app.batching.worker import BatchWorker
 from app.inference.registry import load_all_backends
@@ -59,10 +59,23 @@ async def lifespan(app: FastAPI):
     print(f"BatchWorker started - window={config.BATCH_WINDOW_MS}ms, "
           f"max_batch_size={config.MAX_BATCH_SIZE}")
 
+    print("Connecting to PostgreSQL request_log store...")
+    try:
+        app.state.db_pool = await db.create_pool()
+        print("Connected - request_log table ready.")
+    except Exception as exc:
+        # Same graceful-degradation stance as Redis: the metadata store is
+        # not required for correct predictions, so a database that's down
+        # at startup shouldn't prevent the service itself from starting.
+        print(f"[db] could not connect at startup, request logging disabled: {exc}")
+        app.state.db_pool = None
+
     yield
 
     print("Shutting down BatchWorker...")
     await app.state.worker.stop()
+    if app.state.db_pool is not None:
+        await app.state.db_pool.close()
 
 
 app = FastAPI(title="InferBench", lifespan=lifespan)
@@ -76,6 +89,7 @@ async def health(request: Request):
         "batch_window_ms": config.BATCH_WINDOW_MS,
         "max_batch_size": config.MAX_BATCH_SIZE,
         "redis_available": cache.is_redis_available(),
+        "db_available": request.app.state.db_pool is not None,
     }
 
 
@@ -140,6 +154,19 @@ async def predict(
     cached = cache.get_cached_prediction(image_bytes, backend)
     if cached is not None:
         total_latency_ms = (time.perf_counter() - enqueued_at) * 1000
+
+        # "API -> DB : log latency, batch_size, model_type" - drawn in the
+        # sequence diagram AFTER the alt/else block closes, meaning both
+        # the cache-hit and cache-miss paths log here, not just misses.
+        # A cache hit's row has batch_size = NULL - there was no batch,
+        # nothing to log there - but it's still a real request worth
+        # counting for latency/throughput analysis later.
+        if request.app.state.db_pool is not None:
+            await db.log_request(
+                request.app.state.db_pool, backend, True, None,
+                cached["predicted_class_id"], total_latency_ms,
+            )
+
         return {
             **cached,
             "backend": backend,
@@ -182,6 +209,13 @@ async def predict(
     cache.store_prediction(image_bytes, backend, result)
 
     total_latency_ms = (time.perf_counter() - enqueued_at) * 1000
+
+    if request.app.state.db_pool is not None:
+        await db.log_request(
+            request.app.state.db_pool, backend, False, item.batch_size,
+            predicted_class_id, total_latency_ms,
+        )
+
     return {
         **result,
         "backend": backend,
