@@ -17,6 +17,9 @@ pillow==12.2.0
 # Response caching
 redis==8.0.1
 
+# Request metadata store
+asyncpg==0.31.0
+
 # HTTP client - used by scripts/load_test.py and scripts/verify_cache.py
 httpx==0.28.1
 
