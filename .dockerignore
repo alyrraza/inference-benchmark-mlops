@@ -1,0 +1,34 @@
+# Keeps the build context small and the build fast - none of this is
+# needed inside the API image (see Dockerfile's own comments for exactly
+# what IS copied in).
+
+.venv/
+.pip-cache/
+.hf-cache/
+.claude/
+.redis-data/
+.postgres/
+.postgres-data/
+.prometheus/
+.prometheus-data/
+.grafana/
+.grafana-data/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.onnx
+*.onnx.data
+*.pt
+*.pth
+
+.git/
+docs/
+screenshots/
+kaggle/
+benchmarks/results/
+tests/
+scripts/
+frontend/node_modules/
+frontend/dist/
+
+*.md
