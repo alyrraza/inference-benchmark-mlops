@@ -20,6 +20,7 @@ from contextlib import asynccontextmanager
 import numpy as np
 import torch
 from fastapi import FastAPI, File, HTTPException, Query, Request, Response, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 
 from app import cache, config, db, metrics
 from app.batching.models import QueueItem
@@ -79,6 +80,17 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="InferBench", lifespan=lifespan)
+
+# Local-dev-only: lets the Vite frontend (frontend/, a different origin
+# from this API) call /predict directly from the browser. See
+# config.py's CORS_ALLOWED_ORIGINS and docs/concepts/05c_demo_frontend.md
+# for why this is scoped narrowly to known local origins rather than "*".
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=config.CORS_ALLOWED_ORIGINS,
+    allow_methods=["GET", "POST"],
+    allow_headers=["*"],
+)
 
 
 @app.get("/health")

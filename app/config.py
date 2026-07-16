@@ -85,3 +85,15 @@ DB_PASSWORD = os.environ.get("DB_PASSWORD", "")  # empty - local dev cluster use
 # fresh one each time.
 DB_POOL_MIN_SIZE = int(os.environ.get("DB_POOL_MIN_SIZE", "2"))
 DB_POOL_MAX_SIZE = int(os.environ.get("DB_POOL_MAX_SIZE", "10"))
+
+# --- CORS (local demo frontend only) ---
+# The Vite dev server (frontend/) runs on a different origin
+# (http://localhost:5173) than this API (http://127.0.0.1:8000), so the
+# browser blocks frontend fetch() calls to /predict unless the API
+# explicitly allows it. This is a local-development convenience only -
+# see docs/concepts/05c_demo_frontend.md for why a real deployment would
+# restrict this to specific known origins, not read from an env var that
+# defaults to "allow everything localhost."
+CORS_ALLOWED_ORIGINS = os.environ.get(
+    "CORS_ALLOWED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173"
+).split(",")
