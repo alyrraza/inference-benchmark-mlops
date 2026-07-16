@@ -17,6 +17,16 @@ with a dynamic batching layer built from scratch.
 ![Status](https://img.shields.io/badge/status-in%20progress-yellow)
 [![CI](https://github.com/alyrraza/inference-benchmark-mlops/actions/workflows/ci.yml/badge.svg)](https://github.com/alyrraza/inference-benchmark-mlops/actions/workflows/ci.yml)
 
+## Demo video
+
+[![Watch the InferBench demo](screenshots/frontend_dashboard.png)](screenshots/inferbench_demo.mp4)
+
+Click the image above (or [this link](screenshots/inferbench_demo.mp4)) to
+watch a real prediction go through the stack, with the Grafana dashboard
+updating live as it happens. Recorded using the local demo control panel
+described further down - see "Local demo frontend" for what that is and
+how it differs from the Phase 7 deployment.
+
 ## Architecture
 
 ```mermaid
@@ -114,6 +124,9 @@ endpoint (not just configured to, genuinely up and current):
 
 ## Tech stack
 
+- **React (Vite)** - local-only demo control panel for recording videos,
+  see "Local demo frontend" below - not part of the locked backend
+  architecture and not deployed anywhere
 - **FastAPI** - REST API layer
 - **PyTorch / ONNX Runtime / TorchScript** - three interchangeable CPU
   inference backends behind one common interface
@@ -233,6 +246,35 @@ $env:GF_PATHS_DATA = "$PWD\.grafana-data"
 Open `http://127.0.0.1:3000` (login `admin`/`admin`) - the InferBench
 dashboard is already provisioned, no manual setup needed.
 
+## Local demo frontend
+
+`frontend/` is a small React (Vite) single-page app - a polished local
+"mission control" panel for recording demo videos, **not** part of the
+locked backend architecture in `docs/architecture_diagram.puml`, and
+**not** the same thing as Phase 7's Gradio deployment. See
+`docs/concepts/05c_demo_frontend.md` for the full explanation of why
+both exist: this one only ever runs on `localhost` and is never
+deployed anywhere; Phase 7's Gradio app is the actual public, permanent
+demo link for recruiters.
+
+It has an upload-and-predict panel (drag-and-drop, backend selector,
+animated results), a live stats strip, and the same Grafana dashboard
+embedded via iframe so metrics update in real time as you make
+predictions.
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+Open `http://localhost:5173`. Requires the FastAPI service to be running
+(with CORS enabled, which it is by default - see `app/config.py`'s
+`CORS_ALLOWED_ORIGINS`) and, for the embedded dashboard panel to show
+live data, Grafana running with `GF_SECURITY_ALLOW_EMBEDDING=true` (not
+needed for the rest of this project, only for this iframe embed - see
+the walkthrough doc for the exact launch command).
+
 ## Docker
 
 Not set up yet - coming in Phase 6, which brings every one of these
@@ -241,4 +283,7 @@ one `docker-compose up`.
 
 ## Demo
 
-Not deployed yet - coming in Phase 7 (Gradio on Hugging Face Spaces).
+Not deployed publicly yet - coming in Phase 7 (Gradio on Hugging Face
+Spaces), which will be the permanent, public demo link. The React
+frontend described above is a separate, local-only tool for recording
+demo videos, not a deployment target.
