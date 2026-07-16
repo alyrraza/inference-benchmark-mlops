@@ -145,3 +145,23 @@ def test_predict_logs_to_database(client):
     assert row is not None
     assert row["backend"] == "pytorch"
     assert row["predicted_class_id"] == data["predicted_class_id"]
+
+
+def test_metrics_endpoint_reflects_requests(client):
+    # A fresh image, unseeded, so this is guaranteed a cache miss - the
+    # point of this test is confirming a real /predict call moves the
+    # needle on /metrics, not just that /metrics returns 200.
+    files = {"file": ("test.jpg", _fake_image_bytes(), "image/jpeg")}
+    predict_response = client.post("/predict", files=files, params={"backend": "pytorch"})
+    assert predict_response.status_code == 200
+
+    metrics_response = client.get("/metrics")
+    assert metrics_response.status_code == 200
+    body = metrics_response.text
+
+    # Prometheus's text exposition format - no JSON parsing needed, just
+    # confirm the metric names and this request's label values appear.
+    assert "inferbench_requests_total" in body
+    assert 'inferbench_requests_total{backend="pytorch",cache_hit="false"}' in body
+    assert "inferbench_request_latency_ms" in body
+    assert "inferbench_batch_size" in body
