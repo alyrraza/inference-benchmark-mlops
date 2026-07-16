@@ -1,0 +1,20 @@
+# Prometheus scrape configuration for the Docker Compose stack.
+#
+# Identical to prometheus/prometheus.yml except the scrape target: inside
+# Docker Compose's network, services reach each other by container/
+# service name, never by 127.0.0.1 (that would mean "this Prometheus
+# container itself," not the api container next to it) and never by the
+# host-side D:-drive-workaround ports (6380, 5433, etc.) this project
+# used for the portable local binaries - Compose's own DNS resolves
+# "api" to the api service's container IP directly, on its normal port
+# 8000, with no port-conflict workarounds needed at all.
+
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: "inferbench"
+    static_configs:
+      - targets: ["api:8000"]
+    metrics_path: /metrics

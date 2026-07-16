@@ -1,0 +1,25 @@
+# Docker Compose variant of grafana/provisioning/dashboards/dashboard.yml.
+#
+# The local (portable-binary) version uses a relative path resolved
+# against Grafana's own working directory at launch, which only works
+# because we control exactly how grafana.exe gets started locally (see
+# docs/concepts/05b_phase5_walkthrough.md's --homepath discussion). The
+# official Grafana Docker image has its own working directory
+# conventions we don't control the same way, so this version uses a
+# fixed, absolute container path instead - avoiding that ambiguity
+# entirely. docker-compose.yml mounts grafana/dashboards/ (the actual
+# dashboard JSON, shared with the local setup, unchanged) at exactly
+# this path.
+
+apiVersion: 1
+
+providers:
+  - name: InferBench
+    orgId: 1
+    folder: ""
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 10
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/dashboards

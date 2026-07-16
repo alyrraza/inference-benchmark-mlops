@@ -1,0 +1,18 @@
+# Docker Compose variant of grafana/provisioning/datasources/datasource.yml -
+# identical except the URL, which points at Prometheus by its Compose
+# service name instead of 127.0.0.1. Kept as a separate file rather than
+# templated with an environment variable because Grafana provisioning
+# YAML doesn't reliably support env-var substitution across versions -
+# two explicit, readable files beat one file with unverified templating
+# magic, especially for a config that couldn't be tested end to end in
+# this environment (see docs/concepts/06b_phase6_walkthrough.md).
+
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: true
