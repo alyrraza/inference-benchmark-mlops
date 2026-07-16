@@ -1,0 +1,126 @@
+# Brings up the entire InferBench stack with one command: the FastAPI
+# service, Redis, PostgreSQL, Prometheus, and Grafana, all on one Docker
+# network, matching docs/architecture_diagram.puml exactly. This is what
+# replaces the whole "portable binary on a non-default port on D:"
+# operational pattern Phases 3-5 needed on this Windows dev machine
+# (see each phase's own walkthrough doc for why those workarounds
+# existed) - inside Compose's own network, every service reaches every
+# other service by its plain service name on its normal default port,
+# with no port-conflict workarounds needed at all.
+#
+# CPU-only throughout - no GPU passthrough configured or required. Run
+# with: docker-compose up --build
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: inferbench
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      # Local-dev-only convenience for the React demo frontend (frontend/,
+      # run separately via `npm run dev`, not part of this Compose stack)
+      # to call this API from the browser - see docs/concepts/05c_demo_frontend.md.
+      CORS_ALLOWED_ORIGINS: "http://localhost:5173,http://127.0.0.1:5173"
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 90s
+    networks:
+      - inferbench
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - inferbench
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      # Local-dev credentials, not for production - matches the same
+      # postgres/postgres pattern already used in .github/workflows/ci.yml's
+      # service container, for the same reason: this never leaves a
+      # local or CI sandbox.
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: inferbench
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - inferbench
+
+  prometheus:
+    image: prom/prometheus:v3.13.1
+    volumes:
+      - ./prometheus/prometheus.docker.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    depends_on:
+      - api
+    networks:
+      - inferbench
+
+  grafana:
+    image: grafana/grafana:13.1.0
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      # Anonymous viewer access + iframe embedding: needed only for the
+      # local React demo frontend's embedded dashboard panel (see
+      # docs/concepts/05c_demo_frontend.md) - harmless here since this
+      # entire stack is meant to run on localhost, not the public
+      # internet. A real deployment would remove both.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_SECURITY_ALLOW_EMBEDDING: "true"
+    volumes:
+      - ./grafana/provisioning-docker/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./grafana/provisioning-docker/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./grafana/dashboards:/etc/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - inferbench
+
+networks:
+  inferbench:
+    driver: bridge
+
+volumes:
+  # Named volumes, not bind mounts - data survives `docker-compose down`
+  # (container removal) and only actually disappears on the more
+  # explicit `docker-compose down -v`. Prometheus's own time-series data
+  # is included for consistency, though its recent-history retention
+  # matters less than Postgres's permanent request log or Grafana's own
+  # dashboard/user state.
+  postgres_data:
+  grafana_data:
+  prometheus_data:
