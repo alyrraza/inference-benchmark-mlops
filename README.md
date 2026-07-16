@@ -14,7 +14,7 @@ with a dynamic batching layer built from scratch.
 ![PyTorch](https://img.shields.io/badge/PyTorch-CPU-ee4c2c)
 ![ONNX Runtime](https://img.shields.io/badge/ONNX%20Runtime-CPU-black)
 ![Redis](https://img.shields.io/badge/Redis-caching-DC382D)
-![Status](https://img.shields.io/badge/status-in%20progress-yellow)
+![Status](https://img.shields.io/badge/status-complete-brightgreen)
 [![CI](https://github.com/alyrraza/inference-benchmark-mlops/actions/workflows/ci.yml/badge.svg)](https://github.com/alyrraza/inference-benchmark-mlops/actions/workflows/ci.yml)
 
 ## Demo video
@@ -67,7 +67,7 @@ graph TB
 ```
 
 The GPU benchmark (Kaggle) is offline, one-time work, its results are
-already produced and just get referenced by the deployed CPU service, not
+already produced and just get referenced by the CPU service, not
 reproduced.
 
 ## Build status
@@ -81,7 +81,7 @@ reproduced.
 | 5 | Prometheus + Grafana observability | Done |
 | 6 | Docker Compose orchestration | Done* |
 | 7 | ~~Gradio demo (Hugging Face Spaces)~~ | Skipped by design - see below |
-| 8 | Final README + deployment | In progress |
+| 8 | Final README polish | Done |
 
 *Phase 6 caveat: this machine has no Docker Desktop installed, so the
 Docker Compose setup was designed and validated as thoroughly as
@@ -95,7 +95,7 @@ recorded video already satisfy the "show it working" need a second,
 separately-deployed Gradio app would have duplicated. See "Project
 scope notes" at the bottom.
 
-## Results so far
+## Results
 
 **GPU (Kaggle, Tesla T4)** - see `kaggle/results/benchmark_results.json`:
 
@@ -346,12 +346,15 @@ not be in a real deployment).
   `docs/concepts/06b_phase6_walkthrough.md` - this machine doesn't have
   Docker Desktop installed. Every other component in this repo was built
   and verified with real commands and real observed output.
-- **`docs/concepts/*.md` referenced throughout this README are internal
-  build notes, not part of this public repo.** They exist as this
-  project's own working documentation (what/why/how for every component,
-  plus a full command-by-command build log per phase) but were kept out
-  of version control on purpose - some of the project's early planning
+- **`docs/` (the concept docs plus a few other project files referenced
+  throughout this README) is internal, not part of this public repo.**
+  `docs/concepts/*.md` is this project's own working documentation
+  (what/why/how for every component, plus a full command-by-command
+  build log per phase); `docs/PROJECT_NOTES.md` and
+  `docs/PORTFOLIO_WEBSITE_COPY.md` are interview-prep and portfolio-copy
+  drafts built from that same material. All of it was kept out of
+  version control on purpose - some of the project's early planning
   notes included personal details not meant for a public audience, and
-  the simplest safe choice was to keep the entire `docs/concepts/`
-  folder local rather than curate it file by file. This README is the
-  complete public account of what this project is and how to run it.
+  the simplest safe choice was to keep the entire `docs/` folder local
+  rather than curate it file by file. This README is the complete public
+  account of what this project is and how to run it.
