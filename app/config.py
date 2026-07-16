@@ -66,3 +66,22 @@ REDIS_CONNECT_TIMEOUT_SECONDS = float(os.environ.get("REDIS_CONNECT_TIMEOUT_SECO
 # bound memory growth and to self-heal within an hour if a bad entry were
 # ever cached, not because the data expires in any meaningful way.
 CACHE_TTL_SECONDS = int(os.environ.get("CACHE_TTL_SECONDS", "3600"))
+
+# --- PostgreSQL metadata store settings ---
+# Port 5433, not Postgres's default 5432: same reasoning as Redis's 6380 -
+# this dev machine has leftover PostgreSQL install remnants (data
+# directories with no server binaries attached to them) from a previous
+# setup, and running on a distinct port keeps this project's own instance
+# unambiguous and independent of whatever else might already be configured
+# to expect port 5432 on this machine.
+DB_HOST = os.environ.get("DB_HOST", "127.0.0.1")
+DB_PORT = int(os.environ.get("DB_PORT", "5433"))
+DB_NAME = os.environ.get("DB_NAME", "inferbench")
+DB_USER = os.environ.get("DB_USER", "postgres")
+DB_PASSWORD = os.environ.get("DB_PASSWORD", "")  # empty - local dev cluster uses trust auth, not for production
+
+# Connection pool sizing - see app/db.py and docs/concepts/04_postgres_metadata_store.md
+# for why every request reuses a pooled connection instead of opening a
+# fresh one each time.
+DB_POOL_MIN_SIZE = int(os.environ.get("DB_POOL_MIN_SIZE", "2"))
+DB_POOL_MAX_SIZE = int(os.environ.get("DB_POOL_MAX_SIZE", "10"))

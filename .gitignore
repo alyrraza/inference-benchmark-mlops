@@ -3,6 +3,8 @@
 .hf-cache/
 .claude/
 .redis-data/
+.postgres/
+.postgres-data/
 __pycache__/
 *.pyc
 .pytest_cache/
