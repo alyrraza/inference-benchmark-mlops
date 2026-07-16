@@ -5,6 +5,10 @@
 .redis-data/
 .postgres/
 .postgres-data/
+.prometheus/
+.prometheus-data/
+.grafana/
+.grafana-data/
 __pycache__/
 *.pyc
 .pytest_cache/

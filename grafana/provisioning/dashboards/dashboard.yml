@@ -1,0 +1,19 @@
+# Tells Grafana to auto-load every dashboard JSON file it finds in
+# grafana/dashboards/ on startup - the dashboard provisioning equivalent
+# of datasources/datasource.yml. Combined, these two files mean a fresh
+# Grafana instance pointed at this project's provisioning directory comes
+# up with the Prometheus datasource AND the InferBench dashboard already
+# in place, with zero manual clicking.
+
+apiVersion: 1
+
+providers:
+  - name: InferBench
+    orgId: 1
+    folder: ""
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 10
+    allowUiUpdates: true
+    options:
+      path: grafana/dashboards

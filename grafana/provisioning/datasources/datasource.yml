@@ -1,0 +1,19 @@
+# Auto-configures Grafana's Prometheus datasource on startup - this is
+# what "provisioning" means: Grafana reads this file itself and creates
+# the datasource, instead of a human clicking through Settings ->
+# Data Sources -> Add data source in the UI. Checked into git so the
+# exact same datasource config exists on any machine that runs this
+# project, not just the one it happened to be clicked together on.
+
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    # Grafana and Prometheus both run as separate local processes on this
+    # machine - Grafana reaches Prometheus the same way a browser would,
+    # over plain HTTP to the port Prometheus is told to listen on.
+    url: http://127.0.0.1:9090
+    isDefault: true
+    editable: true

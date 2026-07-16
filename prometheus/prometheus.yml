@@ -1,0 +1,25 @@
+# Prometheus scrape configuration for InferBench.
+#
+# This file is checked into git (unlike the Prometheus binary itself,
+# which is a large, regenerable download - see .gitignore) because it's
+# the actual behavior definition: what to scrape, how often, and what to
+# call it. Anyone cloning this repo gets the same monitoring setup a
+# fresh Prometheus points this file at.
+
+global:
+  # How often Prometheus pulls a fresh snapshot from every target below.
+  # 5s is short enough to see individual /predict requests show up
+  # quickly while testing, without hammering the service - a production
+  # deployment serving real traffic would typically use 15s or 30s.
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: "inferbench"
+    static_configs:
+      # Prometheus itself runs on this same machine and reaches the
+      # FastAPI service the same way any local HTTP client would -
+      # 127.0.0.1, the port uvicorn is told to listen on (see
+      # app/main.py's docstring for the exact launch command).
+      - targets: ["127.0.0.1:8000"]
+    metrics_path: /metrics
