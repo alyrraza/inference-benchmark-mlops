@@ -24,8 +24,10 @@ with a dynamic batching layer built from scratch.
 Click the image above (or [this link](screenshots/inferbench_demo.mp4)) to
 watch a real prediction go through the stack, with the Grafana dashboard
 updating live as it happens. Recorded using the local demo control panel
-described further down - see "Local demo frontend" for what that is and
-how it differs from the Phase 7 deployment.
+described in "Run it yourself" below - a local-only tool built
+specifically for this recording, not a public deployment (this project
+intentionally has no separate hosted demo - see "Project scope notes"
+at the bottom for why).
 
 ## Architecture
 
@@ -77,9 +79,21 @@ reproduced.
 | 3 | Redis response caching + GitHub Actions CI | Done |
 | 4 | PostgreSQL benchmark/metadata store | Done |
 | 5 | Prometheus + Grafana observability | Done |
-| 6 | Docker Compose orchestration | Not started |
-| 7 | Gradio demo (Hugging Face Spaces) | Not started |
-| 8 | Final README + deployment | Not started |
+| 6 | Docker Compose orchestration | Done* |
+| 7 | ~~Gradio demo (Hugging Face Spaces)~~ | Skipped by design - see below |
+| 8 | Final README + deployment | In progress |
+
+*Phase 6 caveat: this machine has no Docker Desktop installed, so the
+Docker Compose setup was designed and validated as thoroughly as
+possible (YAML syntax, every cross-reference between services) but
+could not be run end to end here. See
+`docs/concepts/06b_phase6_walkthrough.md` for exactly what was and
+wasn't verified, and what to check if you run it yourself.
+
+Phase 7 was dropped intentionally: the local React demo frontend and
+recorded video already satisfy the "show it working" need a second,
+separately-deployed Gradio app would have duplicated. See "Project
+scope notes" at the bottom.
 
 ## Results so far
 
@@ -125,7 +139,7 @@ endpoint (not just configured to, genuinely up and current):
 ## Tech stack
 
 - **React (Vite)** - local-only demo control panel for recording videos,
-  see "Local demo frontend" below - not part of the locked backend
+  see "Run it yourself" below (option 3) - not part of the locked backend
   architecture and not deployed anywhere
 - **FastAPI** - REST API layer
 - **PyTorch / ONNX Runtime / TorchScript** - three interchangeable CPU
@@ -139,15 +153,65 @@ endpoint (not just configured to, genuinely up and current):
   counter, and batch-size histogram, scraped from `/metrics` every 5s and
   visualized on a dashboard provisioned entirely from version-controlled
   config
-- **Docker Compose** - multi-service orchestration (Phase 6)
+- **Docker Compose** - all five backend services (API, Redis, Postgres,
+  Prometheus, Grafana) on one network, CPU-only, no GPU passthrough -
+  see the Docker caveat in "Build status" above
 - **GitHub Actions** - CI on every push/PR: installs dependencies, runs
   the pytest smoke suite against real Redis and PostgreSQL service
   containers
 
-## Running locally
+## Run it yourself
 
-Requires Python 3.11+. All dependencies install into a local virtual
-environment inside the project folder.
+Three ways to run this, depending on what you want. If you just want to
+see it work, use option 1. If you want to poke at individual services or
+don't have Docker, use option 2. Option 3 is a separate, optional local
+UI on top of whichever of the first two you're already running.
+
+### 1. Quickest path: Docker Compose
+
+**Requires Docker Desktop.** One command brings up the FastAPI service,
+Redis, PostgreSQL, Prometheus, and Grafana together, networked, with
+Grafana already pointed at Prometheus and the dashboard already
+provisioned - no manual setup after this command finishes.
+
+```powershell
+git clone https://github.com/alyrraza/inference-benchmark-mlops.git
+cd inference-benchmark-mlops
+docker-compose up --build
+```
+
+First run takes a few minutes - the API image's build step downloads
+ViT-Base's weights and exports the ONNX/TorchScript artifacts as part of
+the build itself (see `docs/concepts/06_docker_compose_orchestration.md`
+for why that happens at build time instead of being copied in).
+
+Once it's up:
+
+| Service | URL |
+|---|---|
+| API docs (Swagger UI) | http://127.0.0.1:8000/docs |
+| API health check | http://127.0.0.1:8000/health |
+| Prometheus | http://127.0.0.1:9090 |
+| Grafana (login `admin`/`admin`) | http://127.0.0.1:3000 |
+
+**Honesty note:** this machine has no Docker Desktop installed, so this
+exact setup could be designed and validated (YAML syntax, every service/
+network/volume cross-reference checked by hand) but not run end to end
+here. `docs/concepts/06b_phase6_walkthrough.md` documents precisely
+what was and wasn't verified, and exactly what to check if you run this
+yourself - genuinely useful to read before assuming this path is
+flawless.
+
+### 2. Manual path: individual services, no Docker
+
+What was actually used to build and test this project - useful if you
+want to run without Docker, or dig into one component at a time.
+Everything here uses portable, no-installer binaries and a local Python
+virtual environment, kept off the C: drive throughout (see each phase's
+own walkthrough doc under `docs/concepts/` for the full reasoning behind
+every specific choice below).
+
+**Python environment:**
 
 ```powershell
 cd "D:\MLOps\Infer Bench"
@@ -156,17 +220,16 @@ python -m venv .venv
 .venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
-A local Redis instance is needed for caching (optional - the service
-runs fine without one, every request just becomes a cache miss):
+**Redis** (optional - the service runs fine without it, every request
+just becomes a cache miss):
 
 ```powershell
 winget install Redis.Redis --accept-package-agreements --accept-source-agreements --silent
 ```
 
-A local PostgreSQL instance is needed for request logging (also optional -
-the service runs fine without one, it just stops recording history).
-This project uses EDB's portable binaries zip instead of the installer,
-so nothing gets registered as a Windows service and no admin rights are
+**PostgreSQL** (optional - the service runs fine without it, it just
+stops recording request history). Portable binaries, not the installer,
+so nothing registers as a Windows service and no admin rights are
 needed:
 
 ```powershell
@@ -178,56 +241,9 @@ Remove-Item "postgresql-binaries.zip"
 .\.postgres\pgsql\bin\createdb.exe -U postgres -p 5433 inferbench
 ```
 
-Export the model artifacts once (only needed the first time):
-
-```powershell
-.venv\Scripts\python.exe benchmarks\export_torchscript.py
-.venv\Scripts\python.exe benchmarks\export_onnx.py
-```
-
-Run the tests:
-
-```powershell
-$env:HF_HOME = "D:\MLOps\Infer Bench\.hf-cache"
-.venv\Scripts\python.exe -m pytest tests\ -v
-```
-
-Start the service:
-
-```powershell
-.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000
-```
-
-Test it (in a second terminal):
-
-```powershell
-curl.exe -s http://127.0.0.1:8000/health
-curl.exe -s -X POST "http://127.0.0.1:8000/predict?backend=pytorch" -F "file=@your_image.jpg;type=image/jpeg"
-curl.exe -s http://127.0.0.1:8000/cache/stats
-```
-
-Run the concurrent load test to see the batching layer group requests:
-
-```powershell
-.venv\Scripts\python.exe scripts\load_test.py
-```
-
-Run the cache miss/hit demonstration:
-
-```powershell
-.venv\Scripts\python.exe scripts\verify_cache.py
-```
-
-Run the database logging demonstration:
-
-```powershell
-.venv\Scripts\python.exe scripts\verify_db_logging.py
-```
-
-Prometheus and Grafana (also optional, also portable binaries, no admin
-rights or Windows services - see
-`docs/concepts/05b_phase5_walkthrough.md` for the full setup including a
-Grafana startup gotcha worth knowing about):
+**Prometheus and Grafana** (also optional, also portable binaries - see
+`docs/concepts/05b_phase5_walkthrough.md` for a Grafana startup gotcha
+worth knowing about before you hit it yourself):
 
 ```powershell
 # Prometheus
@@ -243,19 +259,56 @@ $env:GF_PATHS_DATA = "$PWD\.grafana-data"
 .\.grafana\grafana-13.1.0\bin\grafana.exe server --homepath=".grafana\grafana-13.1.0"
 ```
 
-Open `http://127.0.0.1:3000` (login `admin`/`admin`) - the InferBench
-dashboard is already provisioned, no manual setup needed.
+Open `http://127.0.0.1:3000` (login `admin`/`admin`) - the dashboard is
+already provisioned, no manual setup needed.
 
-## Local demo frontend
+**Export the model artifacts** (only needed the first time):
+
+```powershell
+.venv\Scripts\python.exe benchmarks\export_torchscript.py
+.venv\Scripts\python.exe benchmarks\export_onnx.py
+```
+
+**Run the tests:**
+
+```powershell
+$env:HF_HOME = "D:\MLOps\Infer Bench\.hf-cache"
+.venv\Scripts\python.exe -m pytest tests\ -v
+```
+
+**Start the service:**
+
+```powershell
+.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+**Test it** (in a second terminal):
+
+```powershell
+curl.exe -s http://127.0.0.1:8000/health
+curl.exe -s -X POST "http://127.0.0.1:8000/predict?backend=pytorch" -F "file=@your_image.jpg;type=image/jpeg"
+curl.exe -s http://127.0.0.1:8000/cache/stats
+```
+
+**Verification scripts**, each producing real proof, not just "it ran
+with no errors" - see the matching phase's walkthrough doc for exactly
+what each one showed when it was actually run during development:
+
+```powershell
+.venv\Scripts\python.exe scripts\load_test.py          # concurrent requests -> real batching
+.venv\Scripts\python.exe scripts\verify_cache.py        # real cache miss, then real cache hit
+.venv\Scripts\python.exe scripts\verify_db_logging.py   # real rows landing in PostgreSQL
+```
+
+### 3. Optional: the local demo frontend
 
 `frontend/` is a small React (Vite) single-page app - a polished local
-"mission control" panel for recording demo videos, **not** part of the
-locked backend architecture in `docs/architecture_diagram.puml`, and
-**not** the same thing as Phase 7's Gradio deployment. See
-`docs/concepts/05c_demo_frontend.md` for the full explanation of why
-both exist: this one only ever runs on `localhost` and is never
-deployed anywhere; Phase 7's Gradio app is the actual public, permanent
-demo link for recruiters.
+"mission control" panel built specifically for recording the demo video
+above. It is **not** part of the locked backend architecture in
+`docs/architecture_diagram.puml`, and this project has no separately
+deployed public demo (see "Project scope notes" below for why) - this
+only ever runs on `localhost`. See `docs/concepts/05c_demo_frontend.md`
+for the full reasoning.
 
 It has an upload-and-predict panel (drag-and-drop, backend selector,
 animated results), a live stats strip, and the same Grafana dashboard
@@ -268,22 +321,37 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:5173`. Requires the FastAPI service to be running
-(with CORS enabled, which it is by default - see `app/config.py`'s
-`CORS_ALLOWED_ORIGINS`) and, for the embedded dashboard panel to show
-live data, Grafana running with `GF_SECURITY_ALLOW_EMBEDDING=true` (not
-needed for the rest of this project, only for this iframe embed - see
-the walkthrough doc for the exact launch command).
+Open `http://localhost:5173`. Requires the API to already be running
+(either path above), with CORS enabled (on by default - see
+`app/config.py`'s `CORS_ALLOWED_ORIGINS`) and, only if you want the
+embedded dashboard panel to show live data, Grafana running with
+`GF_SECURITY_ALLOW_EMBEDDING=true` and anonymous viewer access (not
+needed for anything else in this project - see
+`docs/concepts/05c_phase_frontend_walkthrough.md` for the exact launch
+command and why those two settings specifically are safe here and would
+not be in a real deployment).
 
-## Docker
+## Project scope notes
 
-Not set up yet - coming in Phase 6, which brings every one of these
-standalone local processes (Redis, PostgreSQL, Prometheus, Grafana) under
-one `docker-compose up`.
-
-## Demo
-
-Not deployed publicly yet - coming in Phase 7 (Gradio on Hugging Face
-Spaces), which will be the permanent, public demo link. The React
-frontend described above is a separate, local-only tool for recording
-demo videos, not a deployment target.
+- **No hosted public demo.** The original plan included a Gradio app on
+  Hugging Face Spaces (this project's own kickoff notes called it
+  "Phase 7"). It was dropped deliberately once the local React frontend
+  and recorded demo video already covered the "show it working"
+  need - a second, simpler, separately-deployed UI would have been
+  redundant effort relative to the actual backend engineering work this
+  project is about. If you want to see it run, either watch the demo
+  video above or run it yourself with the instructions in this section.
+- **Docker Compose is designed, not verified end to end.** Said plainly
+  in "Build status" and above, and covered in full in
+  `docs/concepts/06b_phase6_walkthrough.md` - this machine doesn't have
+  Docker Desktop installed. Every other component in this repo was built
+  and verified with real commands and real observed output.
+- **`docs/concepts/*.md` referenced throughout this README are internal
+  build notes, not part of this public repo.** They exist as this
+  project's own working documentation (what/why/how for every component,
+  plus a full command-by-command build log per phase) but were kept out
+  of version control on purpose - some of the project's early planning
+  notes included personal details not meant for a public audience, and
+  the simplest safe choice was to keep the entire `docs/concepts/`
+  folder local rather than curate it file by file. This README is the
+  complete public account of what this project is and how to run it.
