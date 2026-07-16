@@ -66,7 +66,7 @@ reproduced.
 | 2 | FastAPI service + dynamic batching layer built from scratch | Done |
 | 3 | Redis response caching + GitHub Actions CI | Done |
 | 4 | PostgreSQL benchmark/metadata store | Done |
-| 5 | Prometheus + Grafana observability | Not started |
+| 5 | Prometheus + Grafana observability | Done |
 | 6 | Docker Compose orchestration | Not started |
 | 7 | Gradio demo (Hugging Face Spaces) | Not started |
 | 8 | Final README + deployment | Not started |
@@ -98,6 +98,20 @@ automatic speedup, it depends on the hardware. TensorRT's GPU-specific
 kernel fusion is what produced the large GPU-side win, there's no direct
 CPU equivalent in this comparison.
 
+## Observability
+
+Live Grafana dashboard (provisioned from `grafana/dashboards/inferbench.json`,
+not clicked together manually), showing real traffic from a concurrent
+load test - latency percentiles, throughput by backend and cache hit/miss,
+and the batch size distribution the dynamic batching worker actually formed:
+
+![Grafana dashboard showing InferBench metrics](screenshots/grafana_dashboard.png)
+
+Prometheus confirming it's actually scraping the service's `/metrics`
+endpoint (not just configured to, genuinely up and current):
+
+![Prometheus target health showing the inferbench job up](screenshots/prometheus_targets.png)
+
 ## Tech stack
 
 - **FastAPI** - REST API layer
@@ -108,7 +122,10 @@ CPU equivalent in this comparison.
 - **Redis** - response cache, keyed on a hash of the image bytes + backend
 - **PostgreSQL** - `request_log` table storing backend, cache hit/miss,
   batch size, predicted class, latency, and timestamp for every request
-- **Prometheus + Grafana** - observability (Phase 5)
+- **Prometheus + Grafana** - latency histogram (p50/p95/p99), request
+  counter, and batch-size histogram, scraped from `/metrics` every 5s and
+  visualized on a dashboard provisioned entirely from version-controlled
+  config
 - **Docker Compose** - multi-service orchestration (Phase 6)
 - **GitHub Actions** - CI on every push/PR: installs dependencies, runs
   the pytest smoke suite against real Redis and PostgreSQL service
@@ -194,10 +211,33 @@ Run the database logging demonstration:
 .venv\Scripts\python.exe scripts\verify_db_logging.py
 ```
 
+Prometheus and Grafana (also optional, also portable binaries, no admin
+rights or Windows services - see
+`docs/concepts/05b_phase5_walkthrough.md` for the full setup including a
+Grafana startup gotcha worth knowing about):
+
+```powershell
+# Prometheus
+Invoke-WebRequest -Uri "https://github.com/prometheus/prometheus/releases/download/v3.13.1/prometheus-3.13.1.windows-amd64.zip" -OutFile "prometheus.zip"
+Expand-Archive -Path "prometheus.zip" -DestinationPath ".prometheus\" -Force
+.\.prometheus\prometheus-3.13.1.windows-amd64\prometheus.exe --config.file="prometheus\prometheus.yml" --storage.tsdb.path=".prometheus-data" --web.listen-address=127.0.0.1:9090
+
+# Grafana (separate terminal)
+Invoke-WebRequest -Uri "https://dl.grafana.com/oss/release/grafana-13.1.0.windows-amd64.zip" -OutFile "grafana.zip"
+Expand-Archive -Path "grafana.zip" -DestinationPath ".grafana\" -Force
+$env:GF_PATHS_PROVISIONING = "$PWD\grafana\provisioning"
+$env:GF_PATHS_DATA = "$PWD\.grafana-data"
+.\.grafana\grafana-13.1.0\bin\grafana.exe server --homepath=".grafana\grafana-13.1.0"
+```
+
+Open `http://127.0.0.1:3000` (login `admin`/`admin`) - the InferBench
+dashboard is already provisioned, no manual setup needed.
+
 ## Docker
 
-Not set up yet - coming in Phase 6, once Redis, PostgreSQL, and Prometheus/
-Grafana are wired in.
+Not set up yet - coming in Phase 6, which brings every one of these
+standalone local processes (Redis, PostgreSQL, Prometheus, Grafana) under
+one `docker-compose up`.
 
 ## Demo
 
